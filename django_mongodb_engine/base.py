@@ -2,16 +2,17 @@ import copy
 import datetime
 import decimal
 import sys
-import traceback
-import time
+import warnings
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db.backends.signals import connection_created
 from django.db.utils import DatabaseError
+from pymongo import ReadPreference
 
 from pymongo.collection import Collection
-from pymongo.connection import Connection
+from pymongo.mongo_client import MongoClient
+from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 
 # handle pymongo backward compatibility
 try:
@@ -38,6 +39,8 @@ class DatabaseFeatures(NonrelDatabaseFeatures):
     supports_microsecond_precision = False
     supports_long_model_names = False
 
+    can_rollback_ddl = True
+
 
 class DatabaseOperations(NonrelDatabaseOperations):
     compiler_module = __name__.rsplit('.', 1)[0] + '.compiler'
@@ -59,11 +62,20 @@ class DatabaseOperations(NonrelDatabaseOperations):
         drop all `tables`. No SQL in MongoDB, so just clear all tables
         here and return an empty list.
         """
+
+
+
         for table in tables:
             if table.startswith('system.'):
                 # Do not try to drop system collections.
                 continue
-            self.connection.database[table].remove()
+
+            collection = self.connection.database[table]
+            options = collection.options()
+
+            if not options.get('capped', False):
+                collection.remove({})
+
         return []
 
     def validate_autopk_value(self, value):
@@ -215,9 +227,10 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
 
         def pop(name, default=None):
             return settings.pop(name) or default
+
         db_name = pop('NAME')
         host = pop('HOST')
-        port = pop('PORT')
+        port = pop('PORT', 27017)
         user = pop('USER')
         password = pop('PASSWORD')
         options = pop('OPTIONS', {})
@@ -234,49 +247,42 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         for key in options.iterkeys():
             options[key.lower()] = options.pop(key)
 
-        attempts = 0
-        while True:
-            try:
-                try:
-                    self.connection = Connection(host=host, port=port, **options)
-                    self.database = self.connection[db_name]
-                except TypeError:
-                    exc_info = sys.exc_info()
-                    raise ImproperlyConfigured, exc_info[1], exc_info[2]
+        read_preference = options.get('read_preference')
+        replicaset = options.get('replicaset')
 
-                if user and password:
-                    if not self.database.authenticate(user, password):
-                        raise ImproperlyConfigured("Invalid username or password.")
-                          
-                self.connected = True
-                connection_created.send(sender=self.__class__, connection=self)
-                ''' execute a quick sample query so that the failure will happen 
-                    on the command that is run after the switchover, auth succeeds
-                    on secondary but commands cannot be run. This command will
-                    throw an exception and hence we will attempt to reconnect again '''
-                self.database['system.indexes'].find_one()
-                break
-            except Exception as e:
-                print 'MongoConnectionFailure to database %s %s' % (db_name,str(e))
-                print traceback.format_exc()
+        if not read_preference:
+            read_preference = options.get('slave_okay', options.get('slaveok'))
+            if read_preference:
+                options['read_preference'] = ReadPreference.SECONDARY
+                warnings.warn("slave_okay has been deprecated. "
+                              "Please use read_preference instead.")
 
-                ''' Make sure we set connected to False just in case we failed on the send '''
-                self.connected = False
-                
-                ''' initialize these instance variables, so that we can delete them '''
-                ''' this will ensure that the __get_attr__ class method properly reconnects '''
-                self.database = None
-                self.connection = None
-                del self.database
-                del self.connection
+        conn_options = dict(
+            host=host,
+            port=int(port),
+            document_class=dict,
+            tz_aware=False
+        )
+        conn_options.update(options)
 
-                attempts += 1
-                if attempts < self.conn_retries:
-                    time.sleep(self.conn_sleep_interval)
-                    print 'MongoConnectionRetry attempt=%d' % attempts
-                    continue
-                raise e
-            
+        if replicaset:
+            connection_class = MongoReplicaSetClient
+        else:
+            connection_class = MongoClient
+
+        try:
+            self.connection = connection_class(**conn_options)
+            self.database = self.connection[db_name]
+        except TypeError:
+            exc_info = sys.exc_info()
+            raise ImproperlyConfigured, exc_info[1], exc_info[2]
+
+        if user and password:
+            if not self.database.authenticate(user, password):
+                raise ImproperlyConfigured("Invalid username or password.")
+
+        self.connected = True
+        connection_created.send(sender=self.__class__, connection=self)
 
     def _reconnect(self):
         if self.connected:

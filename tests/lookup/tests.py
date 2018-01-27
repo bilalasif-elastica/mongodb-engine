@@ -2,7 +2,6 @@ from datetime import datetime
 from operator import attrgetter
 
 from django.core.exceptions import FieldError
-from django.db import connection
 from django.db.utils import DatabaseError
 from django.test import TestCase, skipUnlessDBFeature
 
@@ -18,7 +17,7 @@ from models import Author, Article, Tag
 class LookupTests(TestCase):
 
     def setUp(self):
-        # Create a few Authors.
+
         self.au1 = Author(name='Author 1')
         self.au1.save()
         self.au2 = Author(name='Author 2')
