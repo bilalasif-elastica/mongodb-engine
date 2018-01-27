@@ -248,7 +248,6 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
             options[key.lower()] = options.pop(key)
 
         read_preference = options.get('read_preference')
-        replicaset = options.get('replicaset')
 
         if not read_preference:
             read_preference = options.get('slave_okay', options.get('slaveok'))
@@ -265,13 +264,8 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         )
         conn_options.update(options)
 
-        if replicaset:
-            connection_class = MongoReplicaSetClient
-        else:
-            connection_class = MongoClient
-
         try:
-            self.connection = connection_class(**conn_options)
+            self.connection = MongoClient(**conn_options)
             self.database = self.connection[db_name]
         except TypeError:
             exc_info = sys.exc_info()
