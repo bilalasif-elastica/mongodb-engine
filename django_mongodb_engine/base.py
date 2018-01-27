@@ -12,7 +12,6 @@ from pymongo import ReadPreference
 
 from pymongo.collection import Collection
 from pymongo.mongo_client import MongoClient
-from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 
 # handle pymongo backward compatibility
 try:
@@ -198,12 +197,8 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.introspection = DatabaseIntrospection(self)
         self.validation = DatabaseValidation(self)
         self.connected = False
-        ''' this dictates if we want to close connection at the end of each request or cache it (old behavior) '''
+        # this dictates if we want to close connection at the end of each request or cache it (old behavior)
         self.close_connection = kwargs.pop('close_connection', True)
-        ''' number of times to retry the connection on failure '''
-        self.conn_retries = kwargs.pop('conn_retries', 1)
-        ''' time to sleep between retries '''
-        self.conn_sleep_interval = kwargs.pop('conn_sleep_interval', 5)
         del self.connection
 
     def get_collection(self, name, **kwargs):
@@ -260,20 +255,27 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
             host=host,
             port=int(port),
             document_class=dict,
-            tz_aware=False
+            tz_aware=False,
+            connect=False
         )
         conn_options.update(options)
+
+        if user and password:
+            conn_options.update(dict(
+                username=user,
+                password=password,
+                authSource=db_name
+            ))
 
         try:
             self.connection = MongoClient(**conn_options)
             self.database = self.connection[db_name]
+            # Make a simple query so that connection can be established.
+            # Note: Making a call that requires authentication.
+            self.database['system.indexes'].find_one()
         except TypeError:
             exc_info = sys.exc_info()
             raise ImproperlyConfigured, exc_info[1], exc_info[2]
-
-        if user and password:
-            if not self.database.authenticate(user, password):
-                raise ImproperlyConfigured("Invalid username or password.")
 
         self.connected = True
         connection_created.send(sender=self.__class__, connection=self)
