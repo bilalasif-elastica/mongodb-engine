@@ -267,13 +267,13 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
                 authSource=db_name
             ))
 
+        self.connection = MongoClient(**conn_options)
+        self.database = self.connection[db_name]
+
+        # In PyMongo3.6.0, MongoClient is asynchronous. To have consistent behaviour, making a cheap query
         try:
-            self.connection = MongoClient(**conn_options)
-            self.database = self.connection[db_name]
-            # Make a simple query so that connection can be established.
-            # Note: Making a call that requires authentication.
-            self.database['system.indexes'].find_one()
-        except TypeError:
+            self.database.command('ismaster')
+        except Exception:
             exc_info = sys.exc_info()
             raise ImproperlyConfigured, exc_info[1], exc_info[2]
 
