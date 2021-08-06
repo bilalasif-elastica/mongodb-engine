@@ -12,7 +12,6 @@ from pymongo import ReadPreference
 
 from pymongo.collection import Collection
 from pymongo.mongo_client import MongoClient
-from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 
 # handle pymongo backward compatibility
 try:
@@ -198,6 +197,8 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.introspection = DatabaseIntrospection(self)
         self.validation = DatabaseValidation(self)
         self.connected = False
+        # this dictates if we want to close connection at the end of each request or cache it (old behavior)
+        self.close_connection = kwargs.pop('close_connection', True)
         del self.connection
 
     def get_collection(self, name, **kwargs):
@@ -242,7 +243,6 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
             options[key.lower()] = options.pop(key)
 
         read_preference = options.get('read_preference')
-        replicaset = options.get('replicaset')
 
         if not read_preference:
             read_preference = options.get('slave_okay', options.get('slaveok'))
@@ -255,25 +255,27 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
             host=host,
             port=int(port),
             document_class=dict,
-            tz_aware=False
+            tz_aware=False,
+            connect=False
         )
         conn_options.update(options)
 
-        if replicaset:
-            connection_class = MongoReplicaSetClient
-        else:
-            connection_class = MongoClient
+        if user and password:
+            conn_options.update(dict(
+                username=user,
+                password=password,
+                authSource=db_name
+            ))
 
+        self.connection = MongoClient(**conn_options)
+        self.database = self.connection[db_name]
+
+        # In PyMongo3.6.0, MongoClient is asynchronous. To have consistent behaviour, making a cheap query
         try:
-            self.connection = connection_class(**conn_options)
-            self.database = self.connection[db_name]
-        except TypeError:
+            self.database.command('ismaster')
+        except Exception:
             exc_info = sys.exc_info()
             raise ImproperlyConfigured(exc_info[1]).with_traceback(exc_info[2])
-
-        if user and password:
-            if not self.database.authenticate(user, password):
-                raise ImproperlyConfigured("Invalid username or password.")
 
         self.connected = True
         connection_created.send(sender=self.__class__, connection=self)
@@ -292,4 +294,9 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         pass
 
     def close(self):
+        if self.close_connection and self.connected:
+            self.connection.close()
+            del self.database
+            del self.connection
+            self.connected = False
         pass

@@ -348,7 +348,7 @@ class NewStyleIndexTests(TestCase):
         self.assertHaveIndex([('f2', 1)], sparse=True)
         self.assertHaveIndex([('custom', -1), ('f3', 1)])
         self.assertHaveIndex([('geo', '2d')])
-        self.assertHaveIndex([('geo', '2d'), ('f2', 1)], min=42, max=21)
+        self.assertHaveIndex([('geo', '2d'), ('f2', 1)], min=21, max=42)
         self.assertHaveIndex([('dict1.foo', 1)])
         self.assertHaveIndex([('dict_custom.foo', 1)])
         self.assertHaveIndex([('embedded.a2', 1)])
