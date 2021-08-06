@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-__version__ = (0, 6, 0)
+__version__ = (0, 6, 0, 1)
 __author__ = "Flavio Percoco Premoli, Alberto Paro, " + \
              "Jonas Haag and contributors"
 __contact__ = "django-non-relational@googlegroups.com"
@@ -39,11 +39,13 @@ else:
         # to make sure that django-mongodb-engine is loaded very first, we
         # prepend it to the list and gracefully handle when it's a tuple.
         if isinstance(settings.INSTALLED_APPS, tuple):
-            settings.INSTALLED_APPS = ('django_mongodb_engine',) + settings.INSTALLED_APPS
+            settings.INSTALLED_APPS = ('django_mongodb_engine',) + \
+                settings.INSTALLED_APPS
         else:
             settings.INSTALLED_APPS.insert(0, 'django_mongodb_engine')
     except (ImportError, ImproperlyConfigured) as exc:
-        # setup.py imports this file in order to read version/author/... metadata
+        # setup.py imports this file in order to read version/author/...
+        #    metadata
         # but does not necessarily have a Django context.
         import logging
         logging.error('Error while trying to get django'

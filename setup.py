@@ -9,7 +9,8 @@ try:
 except:
     pass
 
-setup(name='django-mongodb-engine',
+setup(
+    name='django-mongodb-engine-py3',
     version='.'.join(map(str, distmeta.__version__)),
     author=distmeta.__author__,
     author_email=distmeta.__contact__,
@@ -30,9 +31,7 @@ setup(name='django-mongodb-engine',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2.5',
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.5',
         'Topic :: Database',
         'Topic :: Internet',
         'Topic :: Software Development :: Libraries :: Python Modules',
