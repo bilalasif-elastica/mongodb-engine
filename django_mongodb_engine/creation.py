@@ -45,11 +45,11 @@ class DatabaseCreation(NonrelDatabaseCreation):
                 ensure_index.first_index = False
             try:
                 return collection.ensure_index(*args, **kwargs)
-            except OperationFailure, e:
+            except OperationFailure as e:
                 # Try with a short name for the index in case the
                 # auto-generated index name is too long
                 index_name = meta.object_name + "_index_" + str(randint(1,100000))
-                print "Error installing index on %s: %s, trying shorter index name: %s" % (meta.object_name, str(e), index_name)
+                print("Error installing index on %s: %s, trying shorter index name: %s" % (meta.object_name, str(e), index_name))
                 return collection.ensure_index(*args, name=index_name, **kwargs)
                 
         ensure_index.first_index = True
