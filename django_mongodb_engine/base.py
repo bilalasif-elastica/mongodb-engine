@@ -239,7 +239,7 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
                                     'update': flags}
 
         # Lower-case all OPTIONS keys.
-        for key in options.keys():
+        for key in list(options.keys()):
             options[key.lower()] = options.pop(key)
 
         read_preference = options.get('read_preference')
